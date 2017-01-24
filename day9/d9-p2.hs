@@ -3,21 +3,17 @@ import Control.Monad
 
 (<|>) = option
 
+expandCountAllR :: Parser Int
 expandCountAllR = do
     xs <- manyv (parseExpand >>= expandCount)
-    return $ sum xs
-
-foo :: Parser Int
-foo = do
-    xs <- manyv (dim <|> unit (1,1) >>= expandCount) 
     return $ sum xs
 
 expandCount :: (Int, Int) -> Parser Int
 expandCount (1,n) = item >> unit n
 expandCount (m,n) = do
     s <- items m
-    let x = runParser foo s
-    unit (x*n)
+    let l = runParser expandCountAllR s
+    unit (l*n)
 
 parseExpand :: Parser (Int,Int)
 parseExpand = dim <|> unit (1,1)
@@ -29,7 +25,7 @@ expandR :: (Int, Int) -> Parser String
 expandR (1,n) = replicate n <$> item
 expandR (m,n) = do
     s <- items m
-    let s' = runParser doAllR s
+    let s' = runParser expandAllR s
     return $ concat $ replicate n s'
 
 doOne = parseExpand >>= expand
@@ -37,7 +33,7 @@ doOne = parseExpand >>= expand
 doOneR = parseExpand >>= expandR
 
 doAll = concat <$> manyv doOne
-doAllR = concat <$> manyv doOneR
+expandAllR = concat <$> manyv doOneR
 
 dim :: Parser (Int, Int)
 dim = do 
@@ -61,7 +57,7 @@ testPassed p = all (\(i,o) -> runParser p i == o) tests
 
 main :: IO ()
 main = do
-    print $ "Test (length <$> doAllR): " ++ (show (testPassed (length <$> doAllR)))
+    print $ "Test (length <$> expandAllR): " ++ (show (testPassed (length <$> expandAllR)))
     print $ "Test expandCountAllR: " ++ (show (testPassed expandCountAllR))
     s <- readFile "input.txt"
     let f = runParser expandCountAllR
