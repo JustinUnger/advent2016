@@ -1,6 +1,3 @@
-import System.Environment
-import Control.Monad.State
-
 data Heading =
     North |
     South | 
@@ -9,58 +6,68 @@ data Heading =
     deriving Show
 
 type Position = (Int, Int)
-type Line = (Position,Position)
-
-data Insn = L Int | R Int deriving Show
 
 type MyState = (Heading, Position, [Position])
 
-step :: Insn -> MyState -> MyState
-step (L d) s@(h, (x,y), ps) = do 
-    let (h',p) = case h of
-                   North -> (West,(x-d,y)) 
-                   West -> (South,(x,y-d))
-                   South ->(East,(x+d,y))
-                   East -> (North,(x,y+d))
-    if (elem p ps) then s else (h', p, p : ps)
-    
-step (R d) s@(h, (x,y), ps) = do
-    let (h', p) = case h of
-                    North -> (East,(x+d,y))
-                    East  -> (South,(x,y-d))
-                    South -> (West,(x-d,y))
-                    West  -> (North,(x,y+d))
-    if (elem p ps) then (h, p, ps) else (h', p, p : ps)
+data Turn = L | R deriving Show
+type Moves = Integer
+type Insn = (Turn,Moves)
+
+turn :: Turn -> Heading -> Heading
+turn R North = West
+turn R West  = South
+turn R South = East
+turn R East  = North
+
+turn L North = East
+turn L East  = South
+turn L South = West
+turn L West  = North
+
+move :: Heading -> Position -> Position
+move North (x,y) = (x, y+1)
+move East  (x,y) = (x+1, y)
+move South (x,y) = (x, y-1)
+move West  (x,y) = (x-1, y)
+
+go :: Turn -> Moves -> Heading -> Position -> [Position] -> [Position]
+go t n h p ps =
+     let h' = turn t h 
+         ps' = take (fromIntegral n) $ tail $ iterate (move h') p 
+         in ps'
+
+step :: Turn -> Moves -> MyState -> MyState
+step t n (h, (x,y), ps) =
+    let ps' = go t n h (last ps) ps in
+    ((turn t h),(last ps'), ps ++ ps')
 
 parse :: String -> Insn
-parse ('L':xs) = L (read xs)
-parse ('R':xs) = R (read xs)
+parse ('L':xs) = (L,read xs)
+parse ('R':xs) = (R,read xs)
 
-myFold :: [Insn] -> MyState
-myFold = foldl (flip step) (North, (0,0), [(0,0)])
+myFold :: [Insn] -> MyState -> Maybe Position
+myFold [] _ = Nothing
+myFold (c:cs) (h, (x,y), ps) = 
+   let (t,n) = c
+       h'    = turn t h
+       ps'   = go t n h (last ps) ps in
+       case foo' ps' ps of
+        Nothing -> myFold cs (h', (last ps'), (ps ++ ps'))    
+        Just x  -> Just x
 
-distance :: MyState -> Int
-distance (_,(x,y),_) = x+y
+foo' :: Eq a => [a] -> [a] -> Maybe a
+foo' [] _ = Nothing
+foo' _ [] = Nothing
+foo' (x:xs) ys = if elem x ys then Just x else foo' xs ys
+
+distance :: Position -> Int
+distance (x,y) = abs x + abs y
 
 main :: IO ()
 main = do
-    [f] <- getArgs
-    s <- readFile f
+    s <- readFile "input.txt"
     let dirs = map parse (map (takeWhile (/= ',')) (words s))
     print dirs
-    print $ myFold dirs
-    print $ distance (myFold dirs)
-
-
--- find if two lines intercept
--- lines are either veritical (x = 3) or horizontrol (slope 0, y = 3)
-
-isVertical :: Line -> Bool
-isVertical ((x,_),(x',_)) = x == x'
-
-intersect :: Line -> Line -> Maybe Position
-intersect l@((x,y),(x',y')) l'@((a,b),(a',b'))    
-    | isVertical l /= isVertical l' = Just intercept
-    | otherwise = Nothing
-        where intercept = if (x == a) then (x,y) else (x',y) 
+    let firstDup = myFold dirs (North, (0,0), [(0,0)])
+    print $ distance <$> firstDup
 
